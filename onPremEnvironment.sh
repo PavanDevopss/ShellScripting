@@ -30,6 +30,10 @@ for package in git curl vim ufw; do
 done
 check_command
 
+# 2.1 Install PostgreSQL
+echo "Installing PostgreSQL..."
+sudo apt install -y postgresql postgresql-contrib
+
 # 3. Install Node.js and npm
 echo "Installing Node.js and npm..."
 if ! command -v node &> /dev/null; then
@@ -68,7 +72,7 @@ fi
 echo "Setting up SSH keys for Bitbucket..."
 if [ ! -f "$HOME/.ssh/id_rsa" ]; then
     echo "Generating SSH key..."
-    ssh-keygen -t rsa -b 4096 -C "your-email@example.com" -f "$HOME/.ssh/id_rsa" -N ""
+    ssh-keygen -t rsa -b 4096 -C "iampavan.blue.com" -f "$HOME/.ssh/id_rsa" -N ""
     check_command
 else
     echo "SSH key already exists."
@@ -80,13 +84,13 @@ echo "Copy the above SSH key to your Bitbucket account (under Personal Settings 
 
 # 7. Clone the Bitbucket repository
 echo "Cloning the Bitbucket repository..."
-if [ ! -d "/var/www/yourapp" ]; then
-    git clone git@bitbucket.org:yourusername/yourrepository.git /var/www/yourapp
+if [ ! -d "/var/www/pernapp" ]; then
+    git clone git@github.com:PavanDevopss/pernapp.git /var/www/pernapp
     check_command
 else
-    echo "Repository already cloned in /var/www/yourapp. Skipping clone."
+    echo "Repository already cloned in /var/www/pernapp. Skipping clone."
 fi
-cd /var/www/yourapp
+cd /var/www/pernapp
 
 # 8. Install Backend Dependencies (Node.js)
 echo "Installing backend dependencies..."
@@ -99,18 +103,28 @@ else
 fi
 
 # 9. Set Up .env File (Use AWS PostgreSQL Database)
-echo "Creating .env file for Node.js app..."
-cat <<EOL > /var/www/yourapp/backend/.env
-# Use the AWS PostgreSQL Database credentials here
-DATABASE_URL=postgres://yourawsdbuser:yourawspassword@yourawshost:yourport/yourdatabase
+log_output "Creating .env file for Node.js app..."
+cat <<EOL > /var/www/pernapp/backend/.env
+# Environment variables for Node.js and PostgreSQL
 PORT=5000
+PG_USER=pavan
+PG_HOST=localhost
+PG_DB=sampledb
+PG_PASSWORD=password
+PG_PORT=5432
 EOL
 check_command
+
+# 9.1 Set Up PostgreSQL Database
+echo "Setting up PostgreSQL database..."
+sudo -u postgres psql -d sampledb -c "CREATE TABLE items (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL);"
+sudo -u postgres psql -c "CREATE USER pavan WITH ENCRYPTED PASSWORD '00998877';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE sampledb TO pavan;"
 
 # 10. Install Frontend Dependencies (React)
 echo "Installing frontend dependencies..."
 if [ -d "frontend" ]; then
-    cd /var/www/yourapp/frontend  # Assuming your React app is in a 'frontend' directory
+    cd /var/www/pernapp/frontend  # Assuming your React app is in a 'frontend' directory
     npm install
     check_command
 else
@@ -120,7 +134,7 @@ fi
 # 11. Build the React App for Production
 echo "Building the React app for production..."
 if [ -d "frontend" ]; then
-    cd /var/www/yourapp/frontend
+    cd /var/www/pernapp/frontend
     npm run build
     check_command
 else
@@ -129,14 +143,14 @@ fi
 
 # 12. Configure Nginx to Serve React and Reverse Proxy Node.js
 echo "Configuring Nginx..."
-sudo bash -c 'cat > /etc/nginx/sites-available/yourapp <<EOF
+sudo bash -c 'cat > /etc/nginx/sites-available/pernapp <<EOF
 server {
     listen 80;
     server_name yourdomain.com;
 
     # Serve React frontend
     location / {
-        root /var/www/yourapp/frontend/build;
+        root /var/www/pernapp/frontend/build;
         try_files \$uri /index.html;
     }
 
@@ -154,14 +168,14 @@ EOF'
 check_command
 
 # Enable the site and restart Nginx
-sudo ln -s /etc/nginx/sites-available/yourapp /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/pernapp /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
 check_command
 
 # 13. Start Node.js Backend with PM2
 echo "Starting Node.js backend with PM2..."
-if [ -f "/var/www/yourapp/backend/server.js" ]; then
-    cd /var/www/yourapp/backend
+if [ -f "/var/www/pernapp/backend/server.js" ]; then
+    cd /var/www/pernapp/backend
     pm2 start server.js  # Replace with the actual entry point of your app (e.g., app.js)
     pm2 save  # Save PM2 process list for automatic restart on reboot
     check_command
@@ -187,9 +201,12 @@ echo "Test the application by navigating to your server IP or domain (http://you
 
 # 17. Secure the Server (Optional: Firewall and SSH Security)
 echo "Configuring firewall to allow HTTP, HTTPS, and SSH traffic..."
-sudo ufw allow 22/tcp   # Allow SSH
-sudo ufw allow 80/tcp   # Allow HTTP
-sudo ufw allow 443/tcp  # Allow HTTPS
+sudo ufw allow ssh          # Allow SSH (port 22)
+sudo ufw allow 22/tcp       # Allow SSH
+sudo ufw allow 80/tcp       # Allow HTTP (port 80)
+sudo ufw allow 443/tcp      # Allow HTTPS (port 443)
+sudo ufw allow 5000/tcp     # If you need to allow port 5000 (custom web app)
+sudo ufw allow 5432/tcp     # If you need to allow PostgreSQL
 sudo ufw enable
 check_command
 
