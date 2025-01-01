@@ -2,75 +2,132 @@
 
 # Make sure to run this script as root or with sudo privileges.
 
+# Function to check for the success of the last command and exit if it failed
+check_command() {
+    if [ $? -ne 0 ]; then
+        echo "Error occurred during the previous step. Exiting."
+        exit 1
+    fi
+}
+
 # 1. Update System Packages
 echo "Updating system packages..."
 sudo apt update && sudo apt upgrade -y
+check_command
 
-# 2. Install Essential Packages (Git, curl, vim, etc.)
+# 2. Install Essential Packages (Git, curl, vim, ufw)
 echo "Installing essential packages..."
-sudo apt install -y git curl vim ufw
+
+# Check if packages are already installed and update if needed
+for package in git curl vim ufw; do
+    if dpkg -l | grep -qw $package; then
+        echo "$package is already installed. Updating..."
+        sudo apt install --only-upgrade $package -y
+    else
+        echo "$package is not installed. Installing..."
+        sudo apt install -y $package
+    fi
+done
+check_command
 
 # 3. Install Node.js and npm
 echo "Installing Node.js and npm..."
-curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
+if ! command -v node &> /dev/null; then
+    curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt install -y nodejs
+    check_command
+else
+    echo "Node.js is already installed. Updating..."
+    sudo apt install --only-upgrade nodejs -y
+    check_command
+fi
 
-# 4. Install PostgreSQL
-echo "Installing PostgreSQL..."
-sudo apt install -y postgresql postgresql-contrib
-
-# 5. Install PM2 (for running Node.js in the background)
+# 4. Install PM2 (for running Node.js in the background)
 echo "Installing PM2..."
-sudo npm install -g pm2
+if ! command -v pm2 &> /dev/null; then
+    sudo npm install -g pm2
+    check_command
+else
+    echo "PM2 is already installed. Updating..."
+    sudo npm update -g pm2
+    check_command
+fi
 
-# 6. Install Nginx (to serve ReactJS and reverse proxy Node.js)
+# 5. Install Nginx (to serve ReactJS and reverse proxy Node.js)
 echo "Installing Nginx..."
-sudo apt install -y nginx
+if ! dpkg -l | grep -qw nginx; then
+    sudo apt install -y nginx
+    check_command
+else
+    echo "Nginx is already installed. Updating..."
+    sudo apt install --only-upgrade nginx -y
+    check_command
+fi
 
-# 7. Set Up SSH Keys for Bitbucket (if not already set)
+# 6. Set Up SSH Keys for Bitbucket (if not already set)
 echo "Setting up SSH keys for Bitbucket..."
 if [ ! -f "$HOME/.ssh/id_rsa" ]; then
     echo "Generating SSH key..."
     ssh-keygen -t rsa -b 4096 -C "your-email@example.com" -f "$HOME/.ssh/id_rsa" -N ""
+    check_command
+else
+    echo "SSH key already exists."
 fi
 
 echo "Displaying the SSH public key for Bitbucket setup:"
 cat "$HOME/.ssh/id_rsa.pub"
 echo "Copy the above SSH key to your Bitbucket account (under Personal Settings > SSH Keys)."
 
-# 8. Clone the Bitbucket repository
+# 7. Clone the Bitbucket repository
 echo "Cloning the Bitbucket repository..."
-git clone git@bitbucket.org:yourusername/yourrepository.git /var/www/yourapp
+if [ ! -d "/var/www/yourapp" ]; then
+    git clone git@bitbucket.org:yourusername/yourrepository.git /var/www/yourapp
+    check_command
+else
+    echo "Repository already cloned in /var/www/yourapp. Skipping clone."
+fi
 cd /var/www/yourapp
 
-# 9. Install Backend Dependencies (Node.js)
+# 8. Install Backend Dependencies (Node.js)
 echo "Installing backend dependencies..."
-cd backend  # Assuming your Node.js app is in a 'backend' directory
-npm install
+if [ -d "backend" ]; then
+    cd backend  # Assuming your Node.js app is in a 'backend' directory
+    npm install
+    check_command
+else
+    echo "'backend' directory not found. Skipping backend dependencies installation."
+fi
 
-# 10. Set Up PostgreSQL Database
-echo "Setting up PostgreSQL database..."
-sudo -u postgres psql -c "CREATE DATABASE yourdatabase;"
-sudo -u postgres psql -c "CREATE USER yourusername WITH ENCRYPTED PASSWORD 'yourpassword';"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE yourdatabase TO yourusername;"
-
-# 11. Set Up .env File (if required for your Node.js app)
+# 9. Set Up .env File (Use AWS PostgreSQL Database)
 echo "Creating .env file for Node.js app..."
 cat <<EOL > /var/www/yourapp/backend/.env
-DATABASE_URL=postgres://yourusername:yourpassword@localhost:5432/yourdatabase
+# Use the AWS PostgreSQL Database credentials here
+DATABASE_URL=postgres://yourawsdbuser:yourawspassword@yourawshost:yourport/yourdatabase
 PORT=5000
 EOL
+check_command
 
-# 12. Install Frontend Dependencies (React)
+# 10. Install Frontend Dependencies (React)
 echo "Installing frontend dependencies..."
-cd /var/www/yourapp/frontend  # Assuming your React app is in a 'frontend' directory
-npm install
+if [ -d "frontend" ]; then
+    cd /var/www/yourapp/frontend  # Assuming your React app is in a 'frontend' directory
+    npm install
+    check_command
+else
+    echo "'frontend' directory not found. Skipping frontend dependencies installation."
+fi
 
-# 13. Build the React App for Production
+# 11. Build the React App for Production
 echo "Building the React app for production..."
-npm run build
+if [ -d "frontend" ]; then
+    cd /var/www/yourapp/frontend
+    npm run build
+    check_command
+else
+    echo "'frontend' directory not found. Skipping React build."
+fi
 
-# 14. Configure Nginx to Serve React and Reverse Proxy Node.js
+# 12. Configure Nginx to Serve React and Reverse Proxy Node.js
 echo "Configuring Nginx..."
 sudo bash -c 'cat > /etc/nginx/sites-available/yourapp <<EOF
 server {
@@ -94,37 +151,53 @@ server {
     }
 }
 EOF'
+check_command
 
 # Enable the site and restart Nginx
 sudo ln -s /etc/nginx/sites-available/yourapp /etc/nginx/sites-enabled/
 sudo systemctl restart nginx
+check_command
 
-# 15. Start Node.js Backend with PM2
+# 13. Start Node.js Backend with PM2
 echo "Starting Node.js backend with PM2..."
-cd /var/www/yourapp/backend
-pm2 start server.js  # Replace with the actual entry point of your app (e.g., app.js)
-pm2 save  # Save PM2 process list for automatic restart on reboot
+if [ -f "/var/www/yourapp/backend/server.js" ]; then
+    cd /var/www/yourapp/backend
+    pm2 start server.js  # Replace with the actual entry point of your app (e.g., app.js)
+    pm2 save  # Save PM2 process list for automatic restart on reboot
+    check_command
+else
+    echo "Backend entry point 'server.js' not found. Skipping PM2 start."
+fi
 
-# 16. Set Up PM2 to Restart on Reboot
+# 14. Set Up PM2 to Restart on Reboot
 echo "Setting up PM2 to restart on reboot..."
 pm2 startup systemd
 sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME
+check_command
 
-# 17. Check that everything is running
+# 15. Check that everything is running
 echo "Checking the status of services..."
 pm2 status
+check_command
 sudo systemctl status nginx
-sudo systemctl status postgresql
+check_command
 
-# 18. Test the Application
+# 16. Test the Application
 echo "Test the application by navigating to your server IP or domain (http://yourdomain.com)."
 
-# 19. Secure the Server (Optional: Firewall and SSH Security)
+# 17. Secure the Server (Optional: Firewall and SSH Security)
 echo "Configuring firewall to allow HTTP, HTTPS, and SSH traffic..."
 sudo ufw allow 22/tcp   # Allow SSH
 sudo ufw allow 80/tcp   # Allow HTTP
 sudo ufw allow 443/tcp  # Allow HTTPS
 sudo ufw enable
+check_command
+
+# 18. Ensure SSH is enabled and properly configured
+echo "Ensuring SSH is enabled and properly configured..."
+sudo systemctl enable ssh
+sudo systemctl start ssh
+check_command
 
 # OPTIONAL: Disable root SSH login (Commented out to avoid disconnection)
 # echo "Disabling root SSH login (for security)..."
