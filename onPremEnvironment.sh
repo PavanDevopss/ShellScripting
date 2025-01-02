@@ -22,12 +22,13 @@ echo "Installing essential packages..."
 for package in git curl vim ufw; do
     if dpkg -l | grep -qw $package; then
         echo "$package is already installed. Updating..."
-        sudo apt install --only-upgrade $package -y
+        sudo apt install --only-upgrade $package -y >> install_log.txt 2>&1
     else
         echo "$package is not installed. Installing..."
-        sudo apt install -y $package
+        sudo apt install -y $package >> install_log.txt 2>&1
     fi
 done
+
 check_command
 
 # 2.1 Install PostgreSQL
