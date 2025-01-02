@@ -82,6 +82,32 @@ echo "Displaying the SSH public key for Bitbucket setup:"
 cat "$HOME/.ssh/id_rsa.pub"
 echo "Copy the above SSH key to your Bitbucket account (under Personal Settings > SSH Keys)."
 
+# 6.1 Function to ask for user approval to continue
+ask_for_approval() {
+    echo "Press Enter to continue to the next step, or type 'exit' to abort."
+    read user_input
+    if [ "$user_input" == "exit" ]; then
+        echo "Process aborted by user."
+        exit 1
+    fi
+}
+
+# 6.2 Define the directory name
+DIR_NAME="pernapp"
+
+# Check if the directory already exists
+if [ -d "$DIR_NAME" ]; then
+    echo "Directory '$DIR_NAME' already exists."
+else
+    # Create the directory
+    mkdir "$DIR_NAME"
+    if [ $? -eq 0 ]; then
+        echo "Directory '$DIR_NAME' created successfully."
+    else
+        echo "Failed to create directory '$DIR_NAME'."
+    fi
+fi
+
 # 7. Clone the Bitbucket repository
 echo "Cloning the Bitbucket repository..."
 if [ ! -d "/var/www/pernapp" ]; then
