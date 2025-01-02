@@ -20,13 +20,8 @@ echo "Installing essential packages..."
 
 # Check if packages are already installed and update if needed
 for package in git curl vim ufw; do
-    if dpkg -l | grep -qw $package; then
-        echo "$package is already installed. Updating..."
-        sudo apt install --only-upgrade $package -y >> install_log.txt 2>&1
-    else
-        echo "$package is not installed. Installing..."
-        sudo apt install -y $package >> install_log.txt 2>&1
-    fi
+    echo "Processing $package..."
+    sudo apt install --only-upgrade -y $package >> install_log.txt 2>&1 || sudo apt install -y $package >> install_log.txt 2>&1
 done
 
 check_command
@@ -68,6 +63,7 @@ else
     sudo apt install --only-upgrade nginx -y
     check_command
 fi
+read -n 1 -s
 
 # 6. Set Up SSH Keys for Bitbucket (if not already set)
 echo "Setting up SSH keys for Bitbucket..."
