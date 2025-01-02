@@ -92,15 +92,15 @@ ask_for_approval() {
     fi
 }
 
-# 6.2 Define the directory name
-DIR_NAME="pernapp"
+# 6.2 Define the directory name with full path
+DIR_NAME="/var/www/pernapp"
 
 # Check if the directory already exists
 if [ -d "$DIR_NAME" ]; then
     echo "Directory '$DIR_NAME' already exists."
 else
     # Create the directory
-    mkdir "$DIR_NAME"
+    mkdir -p "$DIR_NAME"
     if [ $? -eq 0 ]; then
         echo "Directory '$DIR_NAME' created successfully."
     else
@@ -110,12 +110,9 @@ fi
 
 # 7. Clone the Bitbucket repository
 echo "Cloning the Bitbucket repository..."
-if [ ! -d "/var/www/pernapp" ]; then
     git clone git@github.com:PavanDevopss/pernapp.git /var/www/pernapp
     check_command
-else
-    echo "Repository already cloned in /var/www/pernapp. Skipping clone."
-fi
+
 cd /var/www/pernapp
 
 # 8. Install Backend Dependencies (Node.js)
